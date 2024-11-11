@@ -8,11 +8,8 @@ Python version: 3.12 or newer publication;
 
 
 from fractions import Fraction
-from math import cbrt as math_cbrt, ceil, exp as math_exp, log, log10, sqrt as math_sqrt
+import math
 from typing import Any, Self, overload
-
-
-__all__ = ['PhysicsValue', 'ln', 'lg', 'exp', 'sqrt', 'cbrt', 'scientific_notation']
 
 
 class UnitIdentifyError(ValueError):
@@ -33,10 +30,18 @@ class ExponentWithUnitError(ValueError):
     """
 
 
-ENGINEER_SYMBOL = {'y': -24, 'z': -21, 'a': -18, 'f': -15, 'p': -12, 'n': -9, 'u': -6, 'μ': -6, 'm': -3, 'c': -2,
-                   'd': -1, 'k': 3, 'M': 6, 'G': 9, 'T': 12, 'P': 15, 'E': 18, 'Z': 21, 'Y': 24}
-INVERT_ENGINEER_SYMBOL = ['', 'y', '', 'k', 'z', '', 'M', 'a', '', 'G', 'f', '', 'T', 'p', '',
-                          'P', 'n', '', 'E', 'μ', '', 'Z', 'm', '', 'Y']
+class InsignificantResultError(FloatingPointError):
+    """
+    raise when a PhysicsValue more than 10^15 participate in trigonometric function
+    """
+
+
+ENGINEER_SYMBOL = {'q': -30, 'r': -27, 'y': -24, 'z': -21, 'a': -18, 'f': -15, 'p': -12, 'n': -9, 'u': -6, 'μ': -6,
+                   'm': -3, 'c': -2, 'd': -1, '': 0, 'k': 3, 'M': 6, 'G': 9, 'T': 12, 'P': 15, 'E': 18, 'Z': 21,
+                   'Y': 24, 'R': 27, 'Q': 30}
+INVERT_ENGINEER_SYMBOL = {-30: 'q', -27: 'r', -24: 'y', -21: 'z', -18: 'a', -15: 'f', -12: 'p', -9: 'n', -6: 'μ',
+                          -3: 'm', 0: '', 3: 'k', 6: 'M', 9: 'G', 12: 'T', 15: 'P', 18: 'E', 21: 'Z', 24: 'Y',
+                          27: 'R', 30: 'Q'}
 SI_BASIC_UNITS = ['A', 'cd', 'K', 'kg', 'm', 'mol', 's']
 CONSTANT = [0, 0, 0, 0, 0, 0, 0]
 
@@ -48,6 +53,7 @@ SI_EXTEND_UNITS = {(0, 0, 0, 1, 0, 0, 0): 'kg',
                    (0, 0, 0, 0, 0, 1, 0): 'mol',
                    (0, 1, 0, 0, 0, 0, 0): 'cd',
                    (0, 0, 0, 1, 1, 0, -2): 'N',
+                   (0, 0, 0, 1, -1, 0, -2): 'Pa',
                    (0, 0, 0, 1, 2, 0, -2): 'J',
                    (0, 0, 0, 1, 2, 0, -3): 'W',
                    (1, 0, 0, 0, 0, 0, 1): 'C',
@@ -68,13 +74,19 @@ UNITS = {'g': (1, -3, [0, 0, 0, 1, 0, 0, 0]),
          'K': (1, 0, [0, 0, 1, 0, 0, 0, 0]),
          'mol': (1, 0, [0, 0, 0, 0, 0, 1, 0]),
          'cd': (1, 0, [0, 1, 0, 0, 0, 0, 0]),
+         '': (1, 0, [0, 0, 0, 0, 0, 0, 0]),
+         'b': (1, -28, [0, 0, 0, 0, 2, 0, 0]),
+         'min': (6, 1, [0, 0, 0, 0, 0, 0, 1]),
+         'h': (3.6, 3, [0, 0, 0, 0, 0, 0, 1]),
          'd': (8.64, 4, [0, 0, 0, 0, 0, 0, 1]),
-         'a': (3.1536, 7, [0, 0, 0, 0, 0, 0, 1]),
-         'yr': (3.1536, 7, [0, 0, 0, 0, 0, 0, 1]),
+         'a': (3.1558150, 7, [0, 0, 0, 0, 0, 0, 1]),
+         'yr': (3.1558150, 7, [0, 0, 0, 0, 0, 0, 1]),
          'N': (1, 0, [0, 0, 0, 1, 1, 0, -2]),
          'J': (1, 0, [0, 0, 0, 1, 2, 0, -2]),
          'W': (1, 0, [0, 0, 0, 1, 2, 0, -3]),
          'Pa': (1, 0, [0, 0, 0, 1, -1, 0, -2]),
+         'Bar': (1, 5, [0, 0, 0, 1, -1, 0, -2]),
+         'atm': (1.01325, 5, [0, 0, 0, 1, -1, 0, -2]),
          'mHg': (1.3332, -1, [0, 0, 0, 1, -1, 0, -2]),
          'C': (1, 0, [1, 0, 0, 0, 0, 0, 1]),
          'V': (1, 0, [-1, 0, 0, 1, 2, 0, -3]),
@@ -90,6 +102,10 @@ UNITS = {'g': (1, -3, [0, 0, 0, 1, 0, 0, 0]),
          'Bq': (1, 0, [0, 0, 0, 0, 0, 0, -1]),
          'Ci': (3.7, 10, [0, 0, 0, 0, 0, 0, -1]),
          'Gy': (1, 0, [0, 0, 0, 0, 2, 0, -2]),
+         'Sv': (1, 0, [0, 0, 0, 0, 2, 0, -2]),
+         'rem': (1, -2, [0, 0, 0, 0, 2, 0, -2]),
+         'R': (2.58, -4, [1, 0, 0, -1, 0, 0, 1]),
+         'rad': (1, -2, [0, 0, 0, 0, 2, 0, -2]),
          'cal': (4.1859, 0, [0, 0, 0, 1, 2, 0, -2]),
          'Gs': (1, -4, [-1, 0, 0, 1, 0, 0, -2])}
 
@@ -97,7 +113,7 @@ UNITS = {'g': (1, -3, [0, 0, 0, 1, 0, 0, 0]),
 def scientific_notation(_x: float) -> tuple[float, int]:
     """
     convert a number(n) to scientific_notation(a, p)\n
-    n = a * 10 ^ p (1 <= |a| < 10, p ∈ Z)\n
+    let x = a * 10 ^ p (1 <= |a| < 10, p ∈ Z)\n
     >>> scientific_notation(2.5)
     (2.5, 0)
     >>> scientific_notation(0.25)
@@ -105,25 +121,24 @@ def scientific_notation(_x: float) -> tuple[float, int]:
     >>> scientific_notation(25)
     (2.5, 1)
 
-    :param _x: n
     :return: a, p
     """
     if _x >= 1:
-        _p = int(log10(_x))
+        _p = int(math.log10(_x))
         _a = _x / 10 ** _p
         return _a, _p
     elif _x > 0:
-        _p = ceil(-log10(_x))
+        _p = math.ceil(-math.log10(_x))
         _a = _x * 10 ** _p
         return _a, -_p
     elif _x == 0:
         return 0, 0
     elif _x > -1:
-        _p = ceil(-log10(abs(_x)))
+        _p = math.ceil(-math.log10(abs(_x)))
         _a = _x * 10 ** _p
         return _a, -_p
     else:
-        _p = int(log10(abs(_x)))
+        _p = int(math.log10(abs(_x)))
         _a = _x / 10 ** _p
         return _a, _p
 
@@ -161,10 +176,10 @@ class PhysicsValue(object):
     Examples
     --------
     >>> PhysicsValue('1.4kJ')
-    PhysicsValue(1.4, 3, kg=1, m=2, s=-2)
+    1.400 * 10^3 J
 
     >>> PhysicsValue(487, 'cal')
-    PhysicsValue(2.0385333, 3, kg=1, m=2, s=-2)
+    2.039 * 10^3 J
 
     """
     __slots__ = ['a', 'p', 'u']
@@ -298,8 +313,8 @@ class PhysicsValue(object):
             else:
                 return '1'
 
-    def fmt(self, *, check: bool = False, dgt: int = 4, ues: str | bool = False, usn: bool = True,
-            unit: str | tuple[str, int] | list[str | tuple[str, int]] = None) -> str:
+    def fmt(self, unit: str = None, *, check: bool = False, dgt: int = 4, ues: str | bool = True,
+            usn: bool = False, **units: int | Fraction) -> str:
         """
         convert this value to string in specific format
 
@@ -314,8 +329,9 @@ class PhysicsValue(object):
         :param usn: Using Scientific Notation, default to True, if disable and the number is no more than
                     1e308, the result number will be output directly;
 
-        :param unit: assign the unit. For complex unit, using tuple[str, int] in list to set units and
-                     their power.
+        :param unit: assign the unit as a sigle SI or extend unit.
+
+        :param units: assign a complex unit by keyword argument.
 
         Example
         -------
@@ -324,7 +340,7 @@ class PhysicsValue(object):
         >>> print(area)
         2.190 * 10^4 m^2
 
-        >>> print(area.fmt(dgt=6, usn=False))
+        >>> print(area.fmt(dgt=6, ues=False, usn=False))
         21904.0m^2
 
         >>> print(area.fmt(dgt=3, ues=True, usn=False))
@@ -333,15 +349,15 @@ class PhysicsValue(object):
         >>> print(area.fmt(dgt=3, ues='M', usn=False))
         0.0219M m^2
 
-        >>> print(area.fmt(dgt=3, unit=('km', 2)))
+        >>> print(area.fmt(km=2, dgt=3, ues=False, usn=True))
         2.19 * 10^-2 km^2
 
-        >>> print(area.fmt(check=True, unit='s'))
+        >>> print(area.fmt('s', check=True))
         Traceback (most recent call last):
         UnmatchUnitError: This value has unit in m^2 but output as s.
 
         >>> # NOTICE: if scientific notation is necessary to show precision, kwarg 'usn=False' will never work.
-        >>> print(area.fmt(dgt=4, usn=False))
+        >>> print(area.fmt(dgt=4, ues=False, usn=False))
         2.190 * 10^4 m^2
 
         (Not 21900, it shows the wrong precision)
@@ -351,25 +367,19 @@ class PhysicsValue(object):
 
         _a, _p, _u, output_units = self.a, self.p, [i for i in self.u], []
         if unit is not None:
-            if isinstance(unit, list):
-                for v in unit:
-                    if isinstance(v, tuple):
-                        vu, vp = v
-                        output_units.append('%s^%s' % (vu, str(vp)))
-                        a2, p2, u2 = _unit_power(vu, vp)
-                    else:
-                        output_units.append(v)
-                        a2, p2, u2 = _unit_power(v, 1)
-                    _a, _p, _u = _a / a2, _p - p2, [_u[i] - u2[i] for i in range(7)]
-            else:
-                if isinstance(unit, tuple):
-                    vu, vp = unit
-                    output_units.append('%s^%s' % (vu, str(vp)))
-                    a2, p2, u2 = _unit_power(vu, vp)
-                else:
-                    output_units.append(unit)
-                    a2, p2, u2 = _unit_power(unit, 1)
+            output_units.append(unit)
+            a2, p2, u2 = _unit_power(unit, 1)
+            _a, _p, _u = _a / a2, _p - p2, [_u[i] - u2[i] for i in range(7)]
+        else:
+            for vu, vp in units.items():
+                output_units.append('%s^%s' % (vu, str(vp)))
+                a2, p2, u2 = _unit_power(vu, vp)
                 _a, _p, _u = _a / a2, _p - p2, [_u[i] - u2[i] for i in range(7)]
+
+
+        if abs(_a) < 1:
+            _a, _p = _a * 10, _p - 1
+
         if _u != CONSTANT:
             if check:
                 raise UnmatchUnitError(f'This value has unit in {self.unit_str} but output as {unit}.')
@@ -410,6 +420,28 @@ class PhysicsValue(object):
         output_string = f'%.{dgt - _p - 1}f' % _a + output_string
         return output_string
 
+    def in_unit(self, unit: str = None, **kwargs: int) -> float:
+        if unit is None:
+            a, p, u = 1, 0, CONSTANT[:]
+            output_name = []
+            for unit, power in kwargs.items():
+                a0, p0, u0 = _unit_power(unit, power)
+                a *= a0
+                p += p0
+                u = [u[i] + u0[i] for i in range(7)]
+                output_name.append('%s^%d' % (unit, power))
+            if self.u == u:
+                return self.a / a * 10 ** (self.p - p)
+            else:
+                raise UnmatchUnitError(f'This value has unit in {self.unit_str} but output as {'*'.join(output_name)}.')
+
+        else:
+            a, p, u = _unit_power(unit, 1)
+            if self.u == u:
+                return self.a / a * 10 ** (self.p - p)
+            else:
+                raise UnmatchUnitError(f'This value has unit in {self.unit_str} but output as {unit}.')
+
     def __str__(self):
         if self.u == CONSTANT:
             if self.p:
@@ -432,8 +464,13 @@ class PhysicsValue(object):
                     unit_lst.append('%s=%d' % (SI_BASIC_UNITS[i], self.u[i]))
         return 'PhysicsValue(%s, %d, %s)' % (str(self.a), self.p, ', '.join(unit_lst))
 
+    __repr__ = __str__
+
     def __float__(self):
-        return self.a * 10 ** self.p
+        return float(self.a * 10 ** self.p)
+
+    def __abs__(self):
+        return PhysicsValue(abs(self.a), self.p, self.u)
 
     def __mul__(self, other: int | float | Self) -> Self:
         if isinstance(other, (int, float)):
@@ -477,7 +514,6 @@ class PhysicsValue(object):
 
         else:
             return PhysicsValue(self.a ** power, self.p * power, [self.u[i] * power for i in range(7)])
-
 
     def __add__(self, other: int | float | Self) -> Self:
         if isinstance(other, (int, float)):
@@ -629,16 +665,18 @@ class PhysicsValue(object):
             return NotImplemented
 
 
-def lg(value: int | float | PhysicsValue) -> PhysicsValue:
+def lg(value: int | float | PhysicsValue,
+       unit: PhysicsValue | str | tuple[str, int] | list[str | tuple[str, int]]) -> PhysicsValue:
     """
     lg(x)
     """
+
     if isinstance(value, (int, float)):
-        return PhysicsValue(log10(value))
+        return PhysicsValue(math.log10(value))
 
     elif isinstance(value, PhysicsValue):
         if value.u == CONSTANT:
-            return PhysicsValue(value.p + log10(value.a))
+            return PhysicsValue(value.p + math.log10(value.a))
         else:
             raise ExponentWithUnitError(f'PhysicsValue with unit {value.unit_str} participate in logarithm.')
 
@@ -651,11 +689,11 @@ def ln(value: int | float | PhysicsValue):
     ln(x) = log_e(x)
     """
     if isinstance(value, (int, float)):
-        return log(value)
+        return math.log(value)
 
     elif isinstance(value, PhysicsValue):
         if value.u == CONSTANT:
-            return value.p * log(10) + log(value.a)
+            return value.p * math.log(10) + math.log(value.a)
         else:
             raise ExponentWithUnitError(f'PhysicsValue with unit {value.unit_str} participate in logarithm.')
 
@@ -671,18 +709,20 @@ def exp(value: int | float | PhysicsValue) -> PhysicsValue:
         multi = 1
         while True:
             try:
-                result = PhysicsValue(math_exp(float(value) / multi))
+                result = PhysicsValue(math.exp(float(value) / multi))
             except OverflowError:
                 multi *= 2
             else:
                 return result ** multi
 
     elif isinstance(value, PhysicsValue):
+        if value.a == 0:
+            return 1
         if value.u == CONSTANT:
             multi = 1
             while True:
                 try:
-                    result = PhysicsValue(math_exp(float(value) / multi))
+                    result = PhysicsValue(math.exp(float(value) / multi))
                 except OverflowError:
                     multi *= 2
                 else:
@@ -699,7 +739,7 @@ def sqrt(value: int | float | PhysicsValue) -> PhysicsValue:
     sqrt(x) = x ** 0.5
     """
     if isinstance(value, (int, float)):
-        return PhysicsValue(math_sqrt(value))
+        return PhysicsValue(math.sqrt(value))
 
     elif isinstance(value, PhysicsValue):
         if value.p % 2:
@@ -715,11 +755,125 @@ def cbrt(value: int | float | PhysicsValue) -> PhysicsValue:
     cbrt(x) = x ** (1 / 3)
     """
     if isinstance(value, (int, float)):
-        return PhysicsValue(math_cbrt(value))
+        return PhysicsValue(math.cbrt(value))
 
     elif isinstance(value, PhysicsValue):
         new_lst = [Fraction(value.u[i], 3) if value.u[i] % 3 else value.u[i] // 3 for i in range(7)]
-        return PhysicsValue(math_cbrt(value.a * 10 ** (value.p % 3)), value.p // 3, new_lst)
+        return PhysicsValue(math.cbrt(value.a * 10 ** (value.p % 3)), value.p // 3, new_lst)
+
+
+def sin(value: int | float | PhysicsValue) -> PhysicsValue:
+    """sin(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(math.sin(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return value
+            else:
+                return PhysicsValue(math.sin(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
+
+
+def cos(value: int | float | PhysicsValue) -> PhysicsValue:
+    """cos(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(math.cos(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return PhysicsValue(1)
+            else:
+                return PhysicsValue(math.cos(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
+
+
+def tan(value: int | float | PhysicsValue) -> PhysicsValue:
+    """tan(x) = sin(x) / cos(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(math.tan(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return value
+            else:
+                return PhysicsValue(math.tan(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
+
+
+def cot(value: int | float | PhysicsValue) -> PhysicsValue:
+    """cot(x) = cos(x) / sin(x) = 1 / tan(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(1 / math.tan(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return 1 / value
+            else:
+                return PhysicsValue(1 / math.tan(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
+
+
+def sec(value: int | float | PhysicsValue) -> PhysicsValue:
+    """sec(x) = 1 / cos(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(1 / math.cos(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return PhysicsValue(1)
+            else:
+                return PhysicsValue(1 / math.cos(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
+
+
+def csc(value: int | float | PhysicsValue) -> PhysicsValue:
+    """csc(x) = 1 / sin(x)"""
+    if isinstance(value, (int, float)):
+        return PhysicsValue(1 / math.sin(value))
+
+    elif isinstance(value, PhysicsValue):
+        if value.u == CONSTANT:
+            if value.p >= 15:
+                raise InsignificantResultError(
+                    'Due to floating-point number\'s limited precision, the result is meaningless.')
+            elif value.p <= -308:
+                return 1 / value
+            else:
+                return PhysicsValue(1 / math.sin(float(value)))
+        else:
+            raise ExponentWithUnitError(
+                f'PhysicsValue with unit {value.unit_str} participate in trigonometric function.')
 
 
 if __name__ == '__main__':
